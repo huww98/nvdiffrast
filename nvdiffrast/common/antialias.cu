@@ -34,6 +34,8 @@ struct AAWorkItem
         EDGE_MASK       = 3,    // Edge index in lowest bits.
         FLAG_DOWN_BIT   = 2,    // Down instead of right.
         FLAG_TRI1_BIT   = 3,    // Edge is from other pixel's triangle.
+        FLAG_EDGE_BIT   = 4,    // Edge is truly silhouette.
+        FLAG_BG_BIT     = 5,    // Edge is between triangle and background.
     };
 
     int             px, py;         // Pixel x, y.
@@ -255,6 +257,7 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
             px += 1 - d;
             py += d;
         }
+        int tri_bg = tri == tri0 ? tri1 : tri0; 
 
         // Bail out if triangle index is corrupt.
         if (tri < 0 || tri >= p.numTriangles)
@@ -354,6 +357,11 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
             if (same_sign(y0, y1)) d2 = -F32_MAX, dy2 = 1.f;
 
             int di = max_idx3(d0, d1, d2, dy0, dy1, dy2);
+            if (!p.mesh_border)
+            {
+                if (di == 0 && op0 < 0 || di == 1 && op1 < 0 || di == 2 && op2 < 0)
+                    continue;
+            }
             if (di == 0 && same_sign(a0, bb) && fabsf(dy0) >= fabsf(dx0)) dc = d0 / dy0;
             if (di == 1 && same_sign(a1, bb) && fabsf(dy1) >= fabsf(dx1)) dc = d1 / dy1;
             if (di == 2 && same_sign(a2, bb) && fabsf(dy2) >= fabsf(dx2)) dc = d2 / dy2;
@@ -364,6 +372,9 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
             {
                 dc = fminf(fmaxf(dc, 0.f), 1.f);
                 float alpha = ds * (.5f - dc);
+                if (tri_bg < 0)
+                    atomicAdd(p.bg_subpixel + pz, dc - .5f);
+
                 const float* pColor0 = p.color + pixel0 * p.channels;
                 const float* pColor1 = p.color + pixel1 * p.channels;
                 float* pOutput = p.output + (alpha > 0.f ? pixel0 : pixel1) * p.channels;
@@ -374,6 +385,8 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
                 unsigned int flags = pz << 16;
                 flags |= di;
                 flags |= d << AAWorkItem::FLAG_DOWN_BIT;
+                flags |= 1 << AAWorkItem::FLAG_EDGE_BIT;
+                flags |= (tri_bg < 0) << AAWorkItem::FLAG_BG_BIT;
                 flags |= (__float_as_uint(ds) >> 31) << AAWorkItem::FLAG_TRI1_BIT;
                 ((int2*)pItem)[1] = make_int2(flags, __float_as_int(alpha));
             }
@@ -405,8 +418,9 @@ __global__ void AntialiasGradKernel(const AntialiasKernelParams p)
 
         // Read work item filled out by forward kernel.
         int4 item = p.workBuffer[thread_idx + 1];
-        unsigned int amask = __ballot_sync(0xffffffffu, item.w);
-        if (item.w == 0)
+        bool edge = (item.z >> AAWorkItem::FLAG_EDGE_BIT) & 1;
+        unsigned int amask = __ballot_sync(0xffffffffu, edge);
+        if (!edge)
             continue; // No effect.
 
         // Unpack work item and replicate setup from forward analysis kernel.
@@ -441,7 +455,8 @@ __global__ void AntialiasGradKernel(const AntialiasKernelParams p)
         const float* pDy = p.dy + (alpha > 0.f ? pixel0 : pixel1) * p.channels;
 
         // Position gradient weight based on colors and incoming gradients.
-        float dd = 0.f;
+        bool bg = (item.z >> AAWorkItem::FLAG_BG_BIT) & 1;
+        float dd = bg ? -ds * *(p.d_bg_subpixel + pz) : 0.f;
         const float* pColor0 = p.color + pixel0 * p.channels;
         const float* pColor1 = p.color + pixel1 * p.channels;
 

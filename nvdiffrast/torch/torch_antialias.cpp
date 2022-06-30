@@ -65,7 +65,7 @@ TopologyHashWrapper antialias_construct_topology_hash(torch::Tensor tri)
 //------------------------------------------------------------------------
 // Forward op.
 
-std::tuple<torch::Tensor, torch::Tensor> antialias_fwd(torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, TopologyHashWrapper topology_hash_wrap)
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> antialias_fwd(torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, TopologyHashWrapper topology_hash_wrap, bool mesh_border)
 {
     const at::cuda::OptionalCUDAGuard device_guard(device_of(color));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
@@ -114,13 +114,16 @@ std::tuple<torch::Tensor, torch::Tensor> antialias_fwd(torch::Tensor color, torc
     p.xh = .5f * (float)p.width;
     p.yh = .5f * (float)p.height;
     p.allocTriangles = topology_hash.size(0) / (4 * AA_HASH_ELEMENTS_PER_TRIANGLE);
+    p.mesh_border = mesh_border;
 
     // Allocate output tensors.
     torch::Tensor out = color.detach().clone(); // Use color as base.
     torch::TensorOptions opts = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
     torch::Tensor work_buffer = torch::empty({p.n * p.width * p.height * 8 + 4}, opts); // 8 int for a maximum of two work items per pixel.
+    torch::Tensor bg_subpixel = torch::zeros({p.n}, opts);
     p.output = out.data_ptr<float>();
     p.workBuffer = (int4*)(work_buffer.data_ptr<float>());
+    p.bg_subpixel = bg_subpixel.data_ptr<float>();
 
     // Clear the work counters.
     NVDR_CHECK_CUDA_ERROR(cudaMemsetAsync(p.workBuffer, 0, sizeof(int4), stream));
@@ -147,13 +150,13 @@ std::tuple<torch::Tensor, torch::Tensor> antialias_fwd(torch::Tensor color, torc
     NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)AntialiasFwdAnalysisKernel, numCTA * numSM, AA_ANALYSIS_KERNEL_THREADS_PER_BLOCK, args, 0, stream));
 
     // Return results.
-    return std::tuple<torch::Tensor, torch::Tensor>(out, work_buffer);
+    return std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>(out, bg_subpixel, work_buffer);
 }
 
 //------------------------------------------------------------------------
 // Gradient op.
 
-std::tuple<torch::Tensor, torch::Tensor> antialias_grad(torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, torch::Tensor dy, torch::Tensor work_buffer)
+std::tuple<torch::Tensor, torch::Tensor> antialias_grad(torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, torch::Tensor dy, torch::Tensor d_bg_subpixel, torch::Tensor work_buffer)
 {
     const at::cuda::OptionalCUDAGuard device_guard(device_of(color));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
@@ -177,13 +180,13 @@ std::tuple<torch::Tensor, torch::Tensor> antialias_grad(torch::Tensor color, tor
     {
         NVDR_CHECK(pos.sizes().size() == 3 && pos.size(0) > 0 && pos.size(1) > 0 && pos.size(2) == 4, "pos must have shape [>0, >0, 4] or [>0, 4]");
         NVDR_CHECK(rast.size(0) == color.size(0) && pos.size(0) == color.size(0), "minibatch size mismatch between inputs color, raster_out, pos");
-        NVDR_CHECK(dy.size(0) == color.size(0) && rast.size(0) == color.size(0) && pos.size(0) ==color.size(0), "minibatch size mismatch between inputs dy, color, raster_out, pos");
+        NVDR_CHECK(dy.size(0) == color.size(0) && d_bg_subpixel.size(0) == color.size(0) && rast.size(0) == color.size(0) && pos.size(0) ==color.size(0), "minibatch size mismatch between inputs dy, d_bg_subpixel, color, raster_out, pos");
     }
     else
     {
         NVDR_CHECK(pos.sizes().size() == 2 && pos.size(0) > 0 && pos.size(1) == 4, "pos must have shape [>0, >0, 4] or [>0, 4]");
         NVDR_CHECK(rast.size(0) == color.size(0), "minibatch size mismatch between inputs color, raster_out");
-        NVDR_CHECK(dy.size(0) == color.size(0) && rast.size(0) == color.size(0), "minibatch size mismatch between inputs dy, color, raster_out");
+        NVDR_CHECK(dy.size(0) == color.size(0) && d_bg_subpixel.size(0) == color.size(0) && rast.size(0) == color.size(0), "minibatch size mismatch between inputs dy, d_bg_subpixel, color, raster_out");
     }
 
     // Extract input dimensions.
@@ -203,6 +206,7 @@ std::tuple<torch::Tensor, torch::Tensor> antialias_grad(torch::Tensor color, tor
     p.tri = tri.data_ptr<int>();
     p.pos = pos.data_ptr<float>();
     p.dy = dy_.data_ptr<float>();
+    p.d_bg_subpixel = d_bg_subpixel.data_ptr<float>();
     p.workBuffer = (int4*)(work_buffer.data_ptr<float>());
 
     // Misc parameters.

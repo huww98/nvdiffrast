@@ -646,23 +646,23 @@ def texture_construct_mip(tex, max_mip_level=None, cube_mode=False):
 
 class _antialias_func(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, color, rast, pos, tri, topology_hash, pos_gradient_boost):
-        out, work_buffer = _get_plugin().antialias_fwd(color, rast, pos, tri, topology_hash)
+    def forward(ctx, color, rast, pos, tri, topology_hash, pos_gradient_boost, mesh_border=True):
+        out, bg_subpixel_tensor, work_buffer = _get_plugin().antialias_fwd(color, rast, pos, tri, topology_hash, mesh_border)
         ctx.save_for_backward(color, rast, pos, tri)
         ctx.saved_misc = pos_gradient_boost, work_buffer
-        return out
+        return out, bg_subpixel_tensor
 
     @staticmethod
-    def backward(ctx, dy):
+    def backward(ctx, dy, d_bg_subpixel):
         color, rast, pos, tri = ctx.saved_tensors
         pos_gradient_boost, work_buffer = ctx.saved_misc
-        g_color, g_pos = _get_plugin().antialias_grad(color, rast, pos, tri, dy, work_buffer)
+        g_color, g_pos = _get_plugin().antialias_grad(color, rast, pos, tri, dy, d_bg_subpixel, work_buffer)
         if pos_gradient_boost != 1.0:
             g_pos = g_pos * pos_gradient_boost
-        return g_color, None, g_pos, None, None, None
+        return g_color, None, g_pos, None, None, None, None
 
 # Op wrapper.
-def antialias(color, rast, pos, tri, topology_hash=None, pos_gradient_boost=1.0):
+def antialias(color, rast, pos, tri, topology_hash=None, pos_gradient_boost=1.0, mesh_border=True, bg_subpixel=False):
     """Perform antialiasing.
 
     All input tensors must be contiguous and reside in GPU memory. The output tensor
@@ -699,7 +699,11 @@ def antialias(color, rast, pos, tri, topology_hash=None, pos_gradient_boost=1.0)
         topology_hash = _get_plugin().antialias_construct_topology_hash(tri)
 
     # Instantiate the function.
-    return _antialias_func.apply(color, rast, pos, tri, topology_hash, pos_gradient_boost)
+    out, bg_subpixel_tensor = _antialias_func.apply(color, rast, pos, tri, topology_hash, pos_gradient_boost, mesh_border)
+    if bg_subpixel:
+        return out, bg_subpixel_tensor
+    else:
+        return out
 
 # Topology hash precalculation for cases where the triangle array stays constant.
 def antialias_construct_topology_hash(tri):
