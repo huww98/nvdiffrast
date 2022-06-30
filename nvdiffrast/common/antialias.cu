@@ -114,7 +114,7 @@ static __device__ __forceinline__ void evhash_insert_vertex(const AntialiasKerne
 {
     if (va == vb)
         return;
-    
+
     uint64_t v0 = (uint32_t)min(va, vb) + 1; // canonical vertex order
     uint64_t v1 = (uint32_t)max(va, vb) + 1;
     uint64_t vk = v0 | (v1 << 32); // hash key
@@ -257,7 +257,7 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
             px += 1 - d;
             py += d;
         }
-        int tri_bg = tri == tri0 ? tri1 : tri0; 
+        int tri_bg = tri == tri0 ? tri1 : tri0;
 
         // Bail out if triangle index is corrupt.
         if (tri < 0 || tri >= p.numTriangles)
@@ -283,8 +283,8 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
         if (p.instance_mode)
         {
             int vbase = pz * p.numVertices;
-            vi0 += vbase; 
-            vi1 += vbase; 
+            vi0 += vbase;
+            vi1 += vbase;
             vi2 += vbase;
             if (op0 >= 0) op0 += vbase;
             if (op1 >= 0) op1 += vbase;
@@ -493,7 +493,7 @@ __global__ void AntialiasGradKernel(const AntialiasKernelParams p)
         amask = __ballot_sync(amask, !vtxFail);
         if (vtxFail)
             continue;
-    
+
         // Instance mode: Adjust vertex indices based on minibatch index.
         if (p.instance_mode)
         {
