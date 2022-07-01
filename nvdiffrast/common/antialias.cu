@@ -532,7 +532,7 @@ __global__ void AntialiasGradKernel(const AntialiasKernelParams p)
         float db = x1*dy - y1*dx;
 
         // Compute inverse delta-y with epsilon.
-        float ep = copysignf(1e-3f, dy); // ~1/1000 pixel.
+        float ep = copysignf(1e-5f, dy); // ~1/100000 pixel.
         float iy = 1.f / (dy + ep);
 
         // Compute position gradients.
