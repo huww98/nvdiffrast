@@ -328,7 +328,7 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
         float a2 = (x0-ox2)*(y1-oy2) - (x1-ox2)*(y0-oy2);
 
         // If no matching signs anywhere, skip the rest.
-        if (same_sign(a0, bb) || same_sign(a1, bb) || same_sign(a2, bb))
+        if (tri_bg < 0 || same_sign(a0, bb) || same_sign(a1, bb) || same_sign(a2, bb))
         {
             // XY flip for horizontal edges.
             if (d)
@@ -362,9 +362,9 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
                 if (di == 0 && op0 < 0 || di == 1 && op1 < 0 || di == 2 && op2 < 0)
                     continue;
             }
-            if (di == 0 && same_sign(a0, bb) && fabsf(dy0) >= fabsf(dx0)) dc = d0 / dy0;
-            if (di == 1 && same_sign(a1, bb) && fabsf(dy1) >= fabsf(dx1)) dc = d1 / dy1;
-            if (di == 2 && same_sign(a2, bb) && fabsf(dy2) >= fabsf(dx2)) dc = d2 / dy2;
+            if (di == 0 && (tri_bg < 0 || same_sign(a0, bb)) && fabsf(dy0) >= fabsf(dx0)) dc = d0 / dy0;
+            if (di == 1 && (tri_bg < 0 || same_sign(a1, bb)) && fabsf(dy1) >= fabsf(dx1)) dc = d1 / dy1;
+            if (di == 2 && (tri_bg < 0 || same_sign(a2, bb)) && fabsf(dy2) >= fabsf(dx2)) dc = d2 / dy2;
             float eps = .0625f; // Expect no more than 1/16 pixel inaccuracy.
 
             // Adjust output image if a suitable edge was found.
