@@ -1,0 +1,53 @@
+https://patch-diff.githubusercontent.com/raw/pypa/auditwheel/pull/368.patch
+
+diff --git a/src/auditwheel/main_repair.py b/src/auditwheel/main_repair.py
+index 1e0ae58..09d3bfa 100644
+--- a/src/auditwheel/main_repair.py
++++ b/src/auditwheel/main_repair.py
+@@ -88,6 +88,14 @@ def configure_parser(sub_parsers):
+         help="Strip symbols in the resulting wheel",
+         default=False,
+     )
++    p.add_argument(
++        "--exclude",
++        dest="EXCLUDE",
++        help="Exclude SONAME from grafting into the resulting wheel "
++        "(can be specified multiple times)",
++        action="append",
++        default=[],
++    )
+     p.add_argument(
+         "--only-plat",
+         dest="ONLY_PLAT",
+@@ -169,6 +177,7 @@ def execute(args, p):
+         out_dir=args.WHEEL_DIR,
+         update_tags=args.UPDATE_TAGS,
+         patcher=patcher,
++        exclude=args.EXCLUDE,
+         strip=args.STRIP,
+     )
+ 
+diff --git a/src/auditwheel/repair.py b/src/auditwheel/repair.py
+index 4edb625..0d873f1 100644
+--- a/src/auditwheel/repair.py
++++ b/src/auditwheel/repair.py
+@@ -37,6 +37,7 @@ def repair_wheel(
+     out_dir: str,
+     update_tags: bool,
+     patcher: ElfPatcher,
++    exclude: List[str],
+     strip: bool = False,
+ ) -> Optional[str]:
+ 
+@@ -70,6 +71,11 @@ def repair_wheel(
+             ext_libs = v[abis[0]]["libs"]  # type: Dict[str, str]
+             replacements = []  # type: List[Tuple[str, str]]
+             for soname, src_path in ext_libs.items():
++
++                if soname in exclude:
++                    logger.info(f"Excluding {soname}")
++                    continue
++
+                 if src_path is None:
+                     raise ValueError(
+                         (

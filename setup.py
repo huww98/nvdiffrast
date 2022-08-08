@@ -23,7 +23,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/NVlabs/nvdiffrast",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(exclude=["nvdiffrast.tensorflow"]),
     ext_modules=[
         CUDAExtension(
             name='nvdiffrast_plugin',
