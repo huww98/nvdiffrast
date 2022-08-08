@@ -15,78 +15,9 @@ import torch.utils.cpp_extension
 
 #----------------------------------------------------------------------------
 # C++/Cuda plugin compiler/loader.
-
-_cached_plugin = None
 def _get_plugin():
-    # Return cached plugin if already loaded.
-    global _cached_plugin
-    if _cached_plugin is not None:
-        return _cached_plugin
-
-    # Make sure we can find the necessary compiler and libary binaries.
-    if os.name == 'nt':
-        lib_dir = os.path.dirname(__file__) + r"\..\lib"
-        def find_cl_path():
-            import glob
-            for edition in ['Enterprise', 'Professional', 'BuildTools', 'Community']:
-                paths = sorted(glob.glob(r"C:\Program Files (x86)\Microsoft Visual Studio\*\%s\VC\Tools\MSVC\*\bin\Hostx64\x64" % edition), reverse=True)
-                if paths:
-                    return paths[0]
-
-        # If cl.exe is not on path, try to find it.
-        if os.system("where cl.exe >nul 2>nul") != 0:
-            cl_path = find_cl_path()
-            if cl_path is None:
-                raise RuntimeError("Could not locate a supported Microsoft Visual C++ installation")
-            os.environ['PATH'] += ';' + cl_path
-
-    # Compiler options.
-    opts = ['-DNVDR_TORCH']
-
-    # Linker options.
-    if os.name == 'posix':
-        ldflags = ['-lGL', '-lEGL']
-    elif os.name == 'nt':
-        libs = ['gdi32', 'opengl32', 'user32', 'setgpu']
-        ldflags = ['/LIBPATH:' + lib_dir] + ['/DEFAULTLIB:' + x for x in libs]
-
-    # List of source files.
-    source_files = [
-        '../common/common.cpp',
-        '../common/glutil.cpp',
-        '../common/rasterize.cu',
-        '../common/rasterize.cpp',
-        '../common/interpolate.cu',
-        '../common/texture.cu',
-        '../common/texture.cpp',
-        '../common/antialias.cu',
-        'torch_bindings.cpp',
-        'torch_rasterize.cpp',
-        'torch_interpolate.cpp',
-        'torch_texture.cpp',
-        'torch_antialias.cpp',
-    ]
-
-    # Some containers set this to contain old architectures that won't compile. We only need the one installed in the machine.
-    os.environ['TORCH_CUDA_ARCH_LIST'] = ''
-
-    # Try to detect if a stray lock file is left in cache directory and show a warning. This sometimes happens on Windows if the build is interrupted at just the right moment.
-    plugin_name = 'nvdiffrast_plugin'
-    try:
-        lock_fn = os.path.join(torch.utils.cpp_extension._get_build_directory(plugin_name, False), 'lock')
-        if os.path.exists(lock_fn):
-            logging.getLogger('nvdiffrast').warning("Lock file exists in build directory: '%s'" % lock_fn)
-    except:
-        pass
-
-    # Compile and load.
-    source_paths = [os.path.join(os.path.dirname(__file__), fn) for fn in source_files]
-    torch.utils.cpp_extension.load(name=plugin_name, sources=source_paths, extra_cflags=opts, extra_cuda_cflags=opts, extra_ldflags=ldflags, with_cuda=True, verbose=False)
-
-    # Import, cache, and return the compiled module.
     import nvdiffrast_plugin
-    _cached_plugin = nvdiffrast_plugin
-    return _cached_plugin
+    return nvdiffrast_plugin
 
 #----------------------------------------------------------------------------
 # Log level.

@@ -9,6 +9,7 @@
 import nvdiffrast
 import setuptools
 import os
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -23,20 +24,31 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/NVlabs/nvdiffrast",
     packages=setuptools.find_packages(),
-    package_data={
-        'nvdiffrast': [
-            'common/*.h',
-            'common/*.inl',
-            'common/*.cu',
-            'common/*.cpp',
-            'lib/*.h',
-            'torch/*.h',
-            'torch/*.inl',
-            'torch/*.cpp',
-            'tensorflow/*.cu',
-        ] + (['lib/*.lib'] if os.name == 'nt' else [])
+    ext_modules=[
+        CUDAExtension(
+            name='nvdiffrast_plugin',
+            sources=[
+                'nvdiffrast/common/common.cpp',
+                'nvdiffrast/common/glutil.cpp',
+                'nvdiffrast/common/rasterize_kernel.cu',
+                'nvdiffrast/common/rasterize.cpp',
+                'nvdiffrast/common/interpolate_kernel.cu',
+                'nvdiffrast/common/texture_kernel.cu',
+                'nvdiffrast/common/texture.cpp',
+                'nvdiffrast/common/antialias.cu',
+                'nvdiffrast/torch/torch_bindings.cpp',
+                'nvdiffrast/torch/torch_rasterize.cpp',
+                'nvdiffrast/torch/torch_interpolate.cpp',
+                'nvdiffrast/torch/torch_texture.cpp',
+                'nvdiffrast/torch/torch_antialias.cpp',
+            ],
+            libraries=['GL', 'EGL'],
+            define_macros=[('NVDR_TORCH', None)],
+        )
+    ],
+    cmdclass={
+        'build_ext': BuildExtension
     },
-    include_package_data=True,
     install_requires=['numpy'],  # note: can't require torch here as it will install torch even for a TensorFlow container
     classifiers=[
         "Programming Language :: Python :: 3",
