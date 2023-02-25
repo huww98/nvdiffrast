@@ -9,6 +9,7 @@
 #include "torch_common.inl"
 #include "torch_types.h"
 #include <tuple>
+#include <optional>
 
 //------------------------------------------------------------------------
 // Op prototypes. Return type macros for readability.
@@ -35,7 +36,7 @@ OP_RETURN_TT        texture_grad_linear                 (torch::Tensor tex, torc
 OP_RETURN_TTV       texture_grad_linear_mipmap_nearest  (torch::Tensor tex, torch::Tensor uv, torch::Tensor dy, torch::Tensor uv_da, torch::Tensor mip_level_bias, TextureMipWrapper mip_wrapper, std::vector<torch::Tensor> mip_stack, int filter_mode, int boundary_mode);
 OP_RETURN_TTTTV     texture_grad_linear_mipmap_linear   (torch::Tensor tex, torch::Tensor uv, torch::Tensor dy, torch::Tensor uv_da, torch::Tensor mip_level_bias, TextureMipWrapper mip_wrapper, std::vector<torch::Tensor> mip_stack, int filter_mode, int boundary_mode);
 TopologyHashWrapper antialias_construct_topology_hash   (torch::Tensor tri);
-OP_RETURN_TTT       antialias_fwd                       (torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, TopologyHashWrapper topology_hash);
+OP_RETURN_TTT       antialias_fwd                       (torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, std::optional<torch::Tensor> sdf, TopologyHashWrapper topology_hash);
 OP_RETURN_TT        antialias_grad                      (torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, torch::Tensor dy, torch::Tensor d_bg_subpixel, torch::Tensor work_buffer);
 
 //------------------------------------------------------------------------

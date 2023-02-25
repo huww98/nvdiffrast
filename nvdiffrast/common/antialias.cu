@@ -263,6 +263,19 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
         if (tri < 0 || tri >= p.numTriangles)
             continue;
 
+        if (p.sdf && tri_bg < 0) {
+            // Use SDF to kill artifical edges.
+            const float *pSDF = p.sdf + (tri == tri0 ? pixel0 : pixel1) * 3;
+            float sdf = pSDF[0];
+            float dddx = d ? pSDF[2] : pSDF[1];
+            if (tri == tri1)
+                dddx *= -1.;
+            float sdf_bg = sdf + dddx;
+
+            if (sdf_bg <= 0.)
+                continue;
+        }
+
         // Fetch vertex indices.
         int vi0 = p.tri[tri * 3 + 0];
         int vi1 = p.tri[tri * 3 + 1];

@@ -6,6 +6,8 @@
 // distribution of this software and related documentation without an express
 // license agreement from NVIDIA CORPORATION is strictly prohibited.
 
+#include <optional>
+
 #include "torch_common.inl"
 #include "torch_types.h"
 #include "../common/common.h"
@@ -65,7 +67,7 @@ TopologyHashWrapper antialias_construct_topology_hash(torch::Tensor tri)
 //------------------------------------------------------------------------
 // Forward op.
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> antialias_fwd(torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, TopologyHashWrapper topology_hash_wrap)
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> antialias_fwd(torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, std::optional<torch::Tensor> sdf, TopologyHashWrapper topology_hash_wrap)
 {
     const at::cuda::OptionalCUDAGuard device_guard(device_of(color));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
@@ -78,21 +80,32 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> antialias_fwd(torch::Ten
     NVDR_CHECK_CONTIGUOUS(color, rast, pos, tri, topology_hash);
     NVDR_CHECK_F32(color, rast, pos);
     NVDR_CHECK_I32(tri, topology_hash);
+    if (sdf) {
+        NVDR_CHECK_DEVICE(rast, sdf.value());
+        NVDR_CHECK_CONTIGUOUS(sdf.value());
+        NVDR_CHECK_F32(sdf.value());
+    }
 
     // Sanity checks.
     NVDR_CHECK(color.sizes().size() == 4 && color.size(0) > 0 && color.size(1) > 0 && color.size(2) > 0 && color.size(3) > 0, "color must have shape[>0, >0, >0, >0]");
     NVDR_CHECK(rast.sizes().size() == 4 && rast.size(0) > 0 && rast.size(1) > 0 && rast.size(2) > 0 && rast.size(3) == 4, "rast must have shape[>0, >0, >0, 4]");
     NVDR_CHECK(tri.sizes().size() == 2 && tri.size(0) > 0 && tri.size(1) == 3, "tri must have shape [>0, 3]");
     NVDR_CHECK(color.size(1) == rast.size(1) && color.size(2) == rast.size(2), "color and rast inputs must have same spatial dimensions");
+    NVDR_CHECK(rast.size(0) == color.size(0), "minibatch size mismatch between inputs color, rast");
+    if (sdf) {
+        auto &s = sdf.value();
+        NVDR_CHECK(s.sizes().size() == 4 && s.size(0) > 0 && s.size(1) > 0 && s.size(2) > 0 && s.size(3) == 3, "sdf must have shape [>0, >0, >0, 3]");
+        NVDR_CHECK(s.size(1) == rast.size(1) && s.size(2) == rast.size(2), "sdf and rast inputs must have same spatial dimensions");
+        NVDR_CHECK(rast.size(0) == s.size(0), "minibatch size mismatch between inputs sdf, rast");
+    }
     if (p.instance_mode)
     {
         NVDR_CHECK(pos.sizes().size() == 3 && pos.size(0) > 0 && pos.size(1) > 0 && pos.size(2) == 4, "pos must have shape [>0, >0, 4] or [>0, 4]");
-        NVDR_CHECK(rast.size(0) == color.size(0) && pos.size(0) == color.size(0), "minibatch size mismatch between inputs color, rast, pos");
+        NVDR_CHECK(pos.size(0) == color.size(0), "minibatch size mismatch between inputs pos, rast");
     }
     else
     {
         NVDR_CHECK(pos.sizes().size() == 2 && pos.size(0) > 0 && pos.size(1) == 4, "pos must have shape [>0, >0, 4] or [>0, 4]");
-        NVDR_CHECK(rast.size(0) == color.size(0), "minibatch size mismatch between inputs color, rast");
     }
 
     // Extract input dimensions.
@@ -108,6 +121,10 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> antialias_fwd(torch::Ten
     p.rasterOut = rast.data_ptr<float>();
     p.tri = tri.data_ptr<int>();
     p.pos = pos.data_ptr<float>();
+    if (sdf)
+        p.sdf = sdf.value().data_ptr<float>();
+    else
+        p.sdf = nullptr;
     p.evHash = (uint4*)(topology_hash.data_ptr<int>());
 
     // Misc parameters.

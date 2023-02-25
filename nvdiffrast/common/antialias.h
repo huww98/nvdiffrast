@@ -28,6 +28,7 @@ struct AntialiasKernelParams
     const float*    rasterOut;      // Incoming rasterizer output buffer.
     const int*      tri;            // Incoming triangle buffer.
     const float*    pos;            // Incoming position buffer.
+    const float*    sdf;            // Incoming sdf buffer.
     float*          output;         // Output buffer of forward kernel.
     const float*    dy;             // Incoming gradients.
     float*          gradColor;      // Output buffer, color gradient.
