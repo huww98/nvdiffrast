@@ -84,33 +84,3 @@ class AATest(unittest.TestCase):
                 grad_expected[0, :2, 0] = -0.5 * flip
                 grad_expected[0, :2, 3] = -0.1
                 torch.testing.assert_allclose(pos_f.grad, grad_expected)
-
-    def test_mesh_border_no_grad(self):
-        pos = self.pos
-        tri = self.tri
-
-        pos.requires_grad = True
-        ctx = dr.RasterizeGLContext(output_db=False)
-        rast, _ = dr.rasterize(ctx, pos, tri, resolution=(1, 2))
-        color = dr.antialias(self.color, rast, pos, tri, mesh_border=False)
-
-        color.sum().backward()
-        grad_expected = torch.zeros_like(pos)
-        torch.testing.assert_allclose(pos.grad, grad_expected)
-
-
-    def test_mesh_border(self):
-        pos = torch.cat((self.pos, self.pos[:, -1:]), dim=1)
-        tri = torch.cat((self.tri, torch.tensor([
-            [4,3,6],
-        ], dtype=torch.int32, device=self.tri.device)), dim=0)
-
-        pos.requires_grad = True
-        ctx = dr.RasterizeGLContext(output_db=False)
-        rast, _ = dr.rasterize(ctx, pos, tri, resolution=(1, 2))
-        color = dr.antialias(self.color, rast, pos, tri, mesh_border=False)
-
-        color.sum().backward()
-        grad_expected = torch.zeros_like(pos)
-        grad_expected[0, 3:5, 0] = -0.5
-        torch.testing.assert_allclose(pos.grad, grad_expected)

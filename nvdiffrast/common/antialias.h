@@ -28,7 +28,7 @@ struct AntialiasKernelParams
     const float*    rasterOut;      // Incoming rasterizer output buffer.
     const int*      tri;            // Incoming triangle buffer.
     const float*    pos;            // Incoming position buffer.
-    float*          output;         // Output buffer of forward kernel.    
+    float*          output;         // Output buffer of forward kernel.
     const float*    dy;             // Incoming gradients.
     float*          gradColor;      // Output buffer, color gradient.
     float*          gradPos;        // Output buffer, position gradient.
@@ -44,7 +44,6 @@ struct AntialiasKernelParams
     float           xh, yh;         // Transfer to pixel space.
     int             instance_mode;  // 0=normal, 1=instance mode.
     int             tri_const;      // 1 if triangle array is known to be constant.
-    bool            mesh_border;    // Whether to do antialias on mesh border.
     float*          bg_subpixel;    // Accumulated subpixel offset towards background.
     float*          d_bg_subpixel;  // Incoming gradient to bg_subpixel.
 };

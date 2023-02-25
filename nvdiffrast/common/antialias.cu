@@ -357,11 +357,7 @@ __global__ void AntialiasFwdAnalysisKernel(const AntialiasKernelParams p)
             if (same_sign(y0, y1)) d2 = -F32_MAX, dy2 = 1.f;
 
             int di = max_idx3(d0, d1, d2, dy0, dy1, dy2);
-            if (!p.mesh_border)
-            {
-                if (di == 0 && op0 < 0 || di == 1 && op1 < 0 || di == 2 && op2 < 0)
-                    continue;
-            }
+
             if (di == 0 && (tri_bg < 0 || same_sign(a0, bb)) && fabsf(dy0) >= fabsf(dx0)) dc = d0 / dy0;
             if (di == 1 && (tri_bg < 0 || same_sign(a1, bb)) && fabsf(dy1) >= fabsf(dx1)) dc = d1 / dy1;
             if (di == 2 && (tri_bg < 0 || same_sign(a2, bb)) && fabsf(dy2) >= fabsf(dx2)) dc = d2 / dy2;

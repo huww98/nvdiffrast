@@ -646,8 +646,8 @@ def texture_construct_mip(tex, max_mip_level=None, cube_mode=False):
 
 class _antialias_func(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, color, rast, pos, tri, topology_hash, pos_gradient_boost, mesh_border=True):
-        out, bg_subpixel_tensor, work_buffer = _get_plugin().antialias_fwd(color, rast, pos, tri, topology_hash, mesh_border)
+    def forward(ctx, color, rast, pos, tri, topology_hash, pos_gradient_boost):
+        out, bg_subpixel_tensor, work_buffer = _get_plugin().antialias_fwd(color, rast, pos, tri, topology_hash)
         ctx.save_for_backward(color, rast, pos, tri)
         ctx.saved_misc = pos_gradient_boost, work_buffer
         return out, bg_subpixel_tensor
@@ -662,7 +662,7 @@ class _antialias_func(torch.autograd.Function):
         return g_color, None, g_pos, None, None, None, None
 
 # Op wrapper.
-def antialias(color, rast, pos, tri, topology_hash=None, pos_gradient_boost=1.0, mesh_border=True, bg_subpixel=False):
+def antialias(color, rast, pos, tri, topology_hash=None, pos_gradient_boost=1.0, bg_subpixel=False):
     """Perform antialiasing.
 
     All input tensors must be contiguous and reside in GPU memory. The output tensor
@@ -699,7 +699,7 @@ def antialias(color, rast, pos, tri, topology_hash=None, pos_gradient_boost=1.0,
         topology_hash = _get_plugin().antialias_construct_topology_hash(tri)
 
     # Instantiate the function.
-    out, bg_subpixel_tensor = _antialias_func.apply(color, rast, pos, tri, topology_hash, pos_gradient_boost, mesh_border)
+    out, bg_subpixel_tensor = _antialias_func.apply(color, rast, pos, tri, topology_hash, pos_gradient_boost)
     if bg_subpixel:
         return out, bg_subpixel_tensor
     else:
